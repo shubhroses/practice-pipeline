@@ -1,27 +1,33 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO_DIR="rhombus-hackathon"
+# Note: Using manual file upload instead of synced folders for QEMU provider
+REPO_DIR="$HOME/rhombus-project"
 MANIFEST="k8s-deploy.yaml"
 IMAGE_NAME="flask-demo"
 
-echo "1. Bringing up VM (QEMU/ARM64)..."
+echo "1. Bring up VM"
 vagrant up --provider=qemu
 
-echo "2. Building Docker image inside VM..."
+echo "2. Upload project files to VM"
+vagrant ssh -c "mkdir -p ${REPO_DIR}"
+vagrant upload app.py ${REPO_DIR}/
+vagrant upload Dockerfile ${REPO_DIR}/
+vagrant upload requirements.txt ${REPO_DIR}/
+vagrant upload k8s-deploy.yaml ${REPO_DIR}/
+
+echo "3. Build image inside VM"
 vagrant ssh -c "cd ${REPO_DIR} && docker build -t ${IMAGE_NAME} ."
 
-echo "3. Import image into k3s containerd (so k3s can use it)"
+echo "4. Import into k3s containerd"
 vagrant ssh -c "docker save ${IMAGE_NAME} | sudo k3s ctr images import -"
 
-echo "4. Applying k8s manifest and waiting for rollout..."
-vagrant ssh -c "cd ${REPO_DIR} && kubectl apply -f ${MANIFEST} && kubectl rollout status deployment/${IMAGE_NAME}"
+echo "5. Apply k8s manifest and wait"
+vagrant ssh -c "cd ${REPO_DIR} && sudo k3s kubectl apply -f ${MANIFEST} && sudo k3s kubectl rollout status deployment/${IMAGE_NAME}"
 
-echo "✅ Deployment should be up. Pod & service status:"
-vagrant ssh -c "cd ${REPO_DIR} && kubectl get pods -l app=${IMAGE_NAME} -o wide && kubectl get svc flask-service"
-
-echo
-echo "➡ To access the service via port-forward:"
-echo "  vagrant ssh -c 'kubectl port-forward service/flask-service 5000:5000'"
-echo "  then on your host: curl http://localhost:5000"
-
+echo "✅ Done. To access the app:"
+echo "  vagrant ssh -c 'curl http://localhost:30007'"
+echo ""
+echo "Or from host machine (if you want to set up port forwarding):"
+echo "  vagrant ssh -- -L 8080:localhost:30007"
+echo "  then: curl http://localhost:8080"

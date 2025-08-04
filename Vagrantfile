@@ -1,60 +1,41 @@
-require 'rbconfig'
-arch = RbConfig::CONFIG['host_cpu']
-box = if arch.include?("arm") || arch.include?("aarch64")
-        "perk/ubuntu-2204-arm64"
-      else
-        "generic/ubuntu2204"
-      end
-
 Vagrant.configure("2") do |config|
-  config.vm.box = box
-
-  # Forward the Flask app port so host can access it
-  config.vm.network "forwarded_port", guest: 5000, host: 5001
-  config.vm.network "forwarded_port", guest: 22, host: 2222
-
-  config.vm.provider :qemu do |q|
-    q.memory = "4096"
-    q.cpus = 2
-    # On macOS you can rely on HVF acceleration; if needed explicitly:
-    # q.machine = "virt,accel=hvf,highmem=off"
-  end
-
-  # Provisioning script (adjusted for proper kubectl arch)
-  config.vm.provision "shell", inline: <<-SHELL
-    set -e
-
-    # Update and basic tools
-    apt-get update -y
-    apt-get install -y curl git bash-completion
-
-    # Install Docker (official install)
-    curl -fsSL https://get.docker.com | sh
-    usermod -aG docker vagrant
-
-    # Install kubectl matching guest architecture
-    KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-    ARCH=\$(uname -m)
-    if [ "\$ARCH" = "aarch64" ]; then
-      KUBE_ARCH=arm64
-    else
-      KUBE_ARCH=amd64
-    fi
-    curl -LO "https://dl.k8s.io/release/\${KUBECTL_VERSION}/bin/linux/\${KUBE_ARCH}/kubectl"
-    chmod +x kubectl
-    mv kubectl /usr/local/bin/
-
-    # Install k3s (lightweight Kubernetes)
-    curl -sfL https://get.k3s.io | sh
-
-    # Wait a bit for cluster
-    sleep 10
-
-    # Enable kubectl bash completion
-    echo "source <(kubectl completion bash)" >> /home/vagrant/.bashrc
-
-    # Small test: show nodes (non-fatal)
-    /usr/local/bin/kubectl get nodes || true
-  SHELL
-end
-
+    # Use ARM64-specific Ubuntu 22.04 base box (for Apple Silicon Macs)
+    config.vm.box = "perk/ubuntu-2204-arm64"
+  
+    # Port forwarding - using available ports
+    config.vm.network "forwarded_port", guest: 5000, host: 5004
+    config.vm.network "forwarded_port", guest: 22, host: 2223
+  
+    # QEMU provider settings
+    config.vm.provider :qemu do |q|
+      q.memory = "4096"
+      q.cpus = 2
+    end
+  
+    # Provision VM with tools
+    config.vm.provision "shell", inline: <<-SHELL
+      set -e
+      apt-get update -y
+      apt-get install -y curl git bash-completion
+  
+      # Install Docker
+      curl -fsSL https://get.docker.com | sh
+      usermod -aG docker vagrant
+  
+      # Install latest stable kubectl for arm64
+      KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+      curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/arm64/kubectl"
+      chmod +x kubectl
+      mv kubectl /usr/local/bin/
+  
+      # Install k3s
+      curl -sfL https://get.k3s.io | sh
+  
+      # Alias kubectl to k3s kubectl
+      echo 'alias kubectl="k3s kubectl"' >> /home/vagrant/.bashrc
+  
+      sleep 10
+      /usr/local/bin/k3s kubectl get nodes || true
+    SHELL
+  end 
+  
