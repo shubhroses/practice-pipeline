@@ -29,7 +29,7 @@ spec:
           httpGet:
             path: /health
             port: 5000
-          initialDeplaySeconds: 10
+          initialDeploySeconds: 10
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
@@ -37,7 +37,7 @@ spec:
           httpGet:
             path: /ready
             port: 5000
-          initialDeplaySeconds: 5
+          initialDeploySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
