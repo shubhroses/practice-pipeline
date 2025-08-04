@@ -1,18 +1,11 @@
 # DevSecOps Hackathon Project
 
-## Overview
-Small web app deployed into k3s running inside a Vagrantized Ubuntu VM.
+## Problem Statement
 
-## Stack
-- VM: Vagrant + Ubuntu
-- Containerization: Docker
-- Orchestration: k3s (single-node Kubernetes)
-- Web framework: Flask (Python)
+Build and deploy a small web application using a virtualized Linux environment on macOS, with no access to public cloud platforms. The solution must demonstrate a complete DevSecOps pipeline including containerization, orchestration, and deployment automation.
 
-## Quickstart
-(Will fill in as you finalize scripts)
+## Solution Overview
 
-## Key Decisions & Trade-offs
-- Chose k3s for lightweight single-node Kubernetes inside a VM.
-- Flask for minimal Python web app; easy to containerize.
+This project implements a Flask web application deployed to a single-node Kubernetes cluster (k3s) running inside a Vagrant-managed Ubuntu VM. The entire stack runs locally and demonstrates modern DevSecOps practices including containerization, Infrastructure as Code, and automated deployment.
 
+## Architecture
