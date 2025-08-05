@@ -2,57 +2,57 @@
 set -euo pipefail
 
 # Configuration
-REPO_DIR="/home/vagrant/hackathon-project"  # Corrected path
-MANIFEST="k8s-deploy.yaml"
+REPO_URL="https://github.com/shubhroses/rhombus-hackathon.git"
+REPO_DIR="/home/vagrant/rhombus-hackathon"
 IMAGE_NAME="flask-demo"
 
-echo "🚀 Starting DevSecOps Pipeline..."
+echo "🚀 DevSecOps Pipeline..."
 
-echo "1. Bring up VM"
+# 1. Ensure VM is running
+echo "1. Starting VM (if not already running)"
 vagrant up --provider=qemu
 
-echo "2. Upload project files to VM"
-vagrant ssh -c "mkdir -p ${REPO_DIR}"
-vagrant upload app.py ${REPO_DIR}/app.py
-vagrant upload Dockerfile ${REPO_DIR}/Dockerfile  
-vagrant upload requirements.txt ${REPO_DIR}/requirements.txt
-vagrant upload k8s-deploy.yaml ${REPO_DIR}/k8s-deploy.yaml
+# 2. Smart repo handling - clone or pull
+echo "2. Getting latest code from GitHub"
+vagrant ssh -c "
+  if [ -d ${REPO_DIR} ]; then
+    echo '   → Repository exists, pulling latest changes...'
+    cd ${REPO_DIR} && git pull origin main
+  else
+    echo '   → Cloning repository for first time...'
+    git clone ${REPO_URL} ${REPO_DIR}
+  fi
+"
 
-echo "3. Build Docker image inside VM"
+# 3. Build and deploy
+echo "3. Building Docker image"
 vagrant ssh -c "cd ${REPO_DIR} && docker build -t ${IMAGE_NAME} ."
 
-echo "4. Import image into k3s containerd"
+echo "4. Importing to k3s"
 vagrant ssh -c "docker save ${IMAGE_NAME} | sudo k3s ctr images import -"
 
-echo "5. Deploy to Kubernetes"
-vagrant ssh -c "cd ${REPO_DIR} && sudo k3s kubectl apply -f ${MANIFEST}"
+echo "5. Deploying to Kubernetes"
+vagrant ssh -c "cd ${REPO_DIR} && sudo k3s kubectl apply -f k8s-deploy.yaml"
 
-echo "6. Wait for deployment to be ready"
+echo "6. Restarting deployment (ensures new image is used)"
+vagrant ssh -c "sudo k3s kubectl rollout restart deployment/${IMAGE_NAME}"
+
+echo "7. Waiting for deployment"
 vagrant ssh -c "sudo k3s kubectl rollout status deployment/${IMAGE_NAME} --timeout=60s"
 
-echo "7. Test application endpoints"
-echo "   Testing main app..."
+# 8. Test the app
+echo "8. Testing application"
+echo "   Main app:"
 vagrant ssh -c "curl -s http://localhost:30007"
 echo ""
-echo "   Testing health check..."
+echo "   Health check:"
 vagrant ssh -c "curl -s http://localhost:30007/health | python3 -m json.tool"
 echo ""
-echo "   Testing readiness..."
+echo "   Readiness check:"
 vagrant ssh -c "curl -s http://localhost:30007/ready"
-echo ""
-
-echo "8. Show running pods and services"
-vagrant ssh -c "sudo k3s kubectl get pods,services -o wide"
 
 echo ""
-echo "✅ DevSecOps Pipeline Complete!"
+echo "✅ Pipeline complete!"
 echo ""
-echo "🔍 Access your application:"
-echo "  vagrant ssh -c 'curl http://localhost:30007'"
-echo "  vagrant ssh -c 'curl http://localhost:30007/health'"
-echo ""
-echo "📊 Monitor your deployment:"
-echo "  vagrant ssh -c 'sudo k3s kubectl get pods'"
-echo "  vagrant ssh -c 'sudo k3s kubectl logs deployment/flask-demo'"
-echo ""
-echo "🔄 For redeployments, use: ./deploy.sh"
+echo "🔍 Your app is running at: vagrant ssh -c 'curl http://localhost:30007'"
+echo "📊 Check status: vagrant ssh -c 'sudo k3s kubectl get pods'"
