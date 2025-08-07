@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Configuration
-REPO_URL="https://github.com/shubhroses/rhombus-hackathon.git"
-REPO_DIR="/home/vagrant/rhombus-hackathon"
+REPO_URL="https://github.com/shubhroses/practice-pipeline.git"
+REPO_DIR="/home/vagrant/practice-pipeline"
 IMAGE_NAME="flask-demo"
 
 echo "🚀 DevSecOps Pipeline..."
@@ -56,3 +56,4 @@ echo "✅ Pipeline complete!"
 echo ""
 echo "🔍 Your app is running at: vagrant ssh -c 'curl http://localhost:30007'"
 echo "📊 Check status: vagrant ssh -c 'sudo k3s kubectl get pods'"
+echo "📋 View logs: vagrant ssh -c 'sudo k3s kubectl logs -l app=${IMAGE_NAME} --tail=50'"
