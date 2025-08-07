@@ -40,10 +40,10 @@ def readiness_check():
     # Simple readiness check - in a real app, you'd check database connections, etc.
     if time.time() - startup_time > 5:  # Ready after 5 seconds
         logger.info("Readiness check: READY")
-        return jsonify({"status": "ready"}), 200
+        return jsonify({"status": "ready", "message": "App is ready to receive traffic"}), 200
     else:
         logger.warning("Readiness check: NOT READY")
-        return jsonify({"status": "not ready"}), 503
+        return jsonify({"status": "not ready", "message": "App is not ready to receive traffic"}), 503
 
 if __name__ == "__main__":
     logger.info("Starting Flask application...")

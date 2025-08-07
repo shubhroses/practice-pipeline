@@ -137,6 +137,24 @@ vagrant ssh -c "sudo k3s kubectl logs -f deployment/flask-demo"
 
 ## Troubleshooting
 
+### Quick Demo Troubleshooting (5 commands)
+```bash
+# 1) Describe the failing pod (status + Events)
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); echo POD=$POD; sudo k3s kubectl describe pod "$POD"'
+
+# 2) Get logs (fallback to previous if crash-looping)
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); sudo k3s kubectl logs "$POD" --previous || sudo k3s kubectl logs "$POD"'
+
+# 3) Fix image issues fast: rebuild → import into k3s → restart deployment
+vagrant ssh -c 'cd ~/hackathon-project && docker build -t flask-demo . && docker save flask-demo | sudo k3s ctr images import - && sudo k3s kubectl rollout restart deployment/flask-demo'
+
+# 4) Apply manifest changes (if you edited k8s-deploy.yaml)
+vagrant ssh -c 'sudo k3s kubectl apply -f ~/hackathon-project/k8s-deploy.yaml'
+
+# 5) Confirm health/readiness
+vagrant ssh -c 'curl -sS http://localhost:30007/health && echo && curl -sS http://localhost:30007/ready && echo'
+```
+
 ### Common Issues & Solutions
 
 **1. VM Won't Start - Port Conflicts**
@@ -180,6 +198,68 @@ vagrant ssh -c "sudo k3s kubectl describe pod <pod-name>"
 # Solution: Verify service and port forwarding
 vagrant ssh -c "sudo k3s kubectl get services"
 vagrant ssh -c "curl http://localhost:30007"  # Test NodePort
+```
+
+**6. Pod Won't Start (CrashLoopBackOff / ImagePullBackOff / Pending)**
+```bash
+# Identify pod and check status/events
+vagrant ssh -c 'sudo k3s kubectl get pods -o wide'
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); echo "POD=$POD"; sudo k3s kubectl describe pod "$POD"'
+vagrant ssh -c 'sudo k3s kubectl get events --sort-by=.lastTimestamp | tail -n 25'
+```
+
+```bash
+# Verify image reference and availability in k3s containerd
+vagrant ssh -c 'sudo k3s kubectl get deployment flask-demo -o jsonpath="{.spec.template.spec.containers[0].image}"; echo'
+vagrant ssh -c 'sudo k3s ctr images list | grep flask-demo || true'
+```
+
+```bash
+# If image is missing or ImagePullBackOff/ErrImageNeverPull, rebuild, import, and restart
+vagrant ssh -c 'cd ~/hackathon-project && docker build -t flask-demo . && docker save flask-demo | sudo k3s ctr images import - && sudo k3s kubectl rollout restart deployment/flask-demo'
+```
+
+```bash
+# Inspect security context for conflicts (runAsNonRoot, dropped capabilities)
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); echo "Pod securityContext:"; sudo k3s kubectl get pod "$POD" -o jsonpath="{.spec.securityContext}"; echo; echo "Container securityContext:"; sudo k3s kubectl get pod "$POD" -o jsonpath="{.spec.containers[0].securityContext}"; echo'
+```
+
+```bash
+# Check resource-related reasons (OOMKilled, CrashLoopBackOff) and limits
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); echo "State:"; sudo k3s kubectl get pod "$POD" -o jsonpath="{.status.containerStatuses[0].state}"; echo; echo "LastState:"; sudo k3s kubectl get pod "$POD" -o jsonpath="{.status.containerStatuses[0].lastState}"; echo'
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); sudo k3s kubectl describe pod "$POD" | sed -n "/Limits:/,/Environment:/p"'
+```
+
+```bash
+# Get logs (use --previous if crash looping)
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); sudo k3s kubectl logs "$POD" --previous || sudo k3s kubectl logs "$POD"'
+```
+
+```bash
+# Force a fresh pod (after fixing the cause)
+vagrant ssh -c 'sudo k3s kubectl delete pod -l app=flask-demo'
+```
+
+```bash
+# Validate probes if restarts are probe-related
+vagrant ssh -c 'curl -sS http://localhost:30007/health; echo; curl -sS http://localhost:30007/ready; echo'
+```
+
+```bash
+# Reapply manifest if needed (to pick up edits)
+vagrant ssh -c 'sudo k3s kubectl apply -f ~/hackathon-project/k8s-deploy.yaml'
+```
+
+```bash
+# Quick event tail for the specific pod
+vagrant ssh -c 'POD=$(sudo k3s kubectl get pods -l app=flask-demo -o jsonpath="{.items[0].metadata.name}"); sudo k3s kubectl describe pod "$POD" | sed -n "/Events:/,$p"'
+```
+
+```bash
+# Common recovery for ImagePullBackOff in this setup
+vagrant ssh -c 'cd ~/hackathon-project && docker build -t flask-demo .'
+vagrant ssh -c 'docker save flask-demo | sudo k3s ctr images import -'
+vagrant ssh -c 'sudo k3s kubectl rollout restart deployment/flask-demo'
 ```
 
 ### Recovery Procedures
