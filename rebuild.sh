@@ -5,6 +5,9 @@ set -euo pipefail
 REPO_URL="https://github.com/shubhroses/practice-pipeline.git"
 REPO_DIR="/home/vagrant/practice-pipeline"
 IMAGE_NAME="flask-demo"
+# Docker Hub settings
+DOCKERHUB_USER="shubhroses"
+IMAGE_TAG="${IMAGE_TAG:-$(date +%Y%m%d%H%M%S)}"
 
 echo "🔧 Starting complete teardown/rebuild test..."
 
@@ -27,21 +30,23 @@ vagrant ssh -c "docker --version && kubectl version --client && sudo systemctl s
 echo "4. Cloning repository..."
 vagrant ssh -c "git clone ${REPO_URL} ${REPO_DIR}"
 
-# 5. Build and deploy (same as run.sh)
 echo "5. Building Docker image"
-vagrant ssh -c "cd ${REPO_DIR} && docker build -t ${IMAGE_NAME} ."
+vagrant ssh -c "cd ${REPO_DIR} && docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . && docker tag ${IMAGE_NAME}:${IMAGE_TAG} docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-echo "6. Importing to k3s"
-vagrant ssh -c "docker save ${IMAGE_NAME} | sudo k3s ctr images import -"
+echo "6. Pushing image to Docker Hub (requires prior 'docker login' inside VM)"
+vagrant ssh -c "docker push docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "7. Deploying to Kubernetes"
 vagrant ssh -c "cd ${REPO_DIR} && sudo k3s kubectl apply -f k8s-deploy.yaml"
 
-echo "8. Waiting for deployment"
+echo "8. Updating deployment image to docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
+vagrant ssh -c "sudo k3s kubectl set image deployment/${IMAGE_NAME} flask=docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG} --record"
+
+echo "9. Waiting for deployment"
 vagrant ssh -c "sudo k3s kubectl rollout status deployment/${IMAGE_NAME} --timeout=60s"
 
 # 9. Test the app (same comprehensive testing as run.sh)
-echo "9. Testing application"
+echo "10. Testing application"
 echo "   Main app:"
 vagrant ssh -c "curl -s http://localhost:30007"
 echo ""

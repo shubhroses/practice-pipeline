@@ -25,7 +25,7 @@ spec:
       containers:
       - name: flask
         image: flask-demo
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5000
           protocol: TCP

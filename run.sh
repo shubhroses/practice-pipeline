@@ -5,6 +5,9 @@ set -euo pipefail
 REPO_URL="https://github.com/shubhroses/practice-pipeline.git"
 REPO_DIR="/home/vagrant/practice-pipeline"
 IMAGE_NAME="flask-demo"
+# Docker Hub settings: set DOCKERHUB_USER (e.g., export DOCKERHUB_USER=myuser)
+DOCKERHUB_USER="shubhroses"
+IMAGE_TAG="${IMAGE_TAG:-$(date +%Y%m%d%H%M%S)}"
 
 echo "🚀 DevSecOps Pipeline..."
 
@@ -24,18 +27,21 @@ vagrant ssh -c "
   fi
 "
 
-# 3. Build and deploy
+# 3. Build and tag
 echo "3. Building Docker image"
-vagrant ssh -c "cd ${REPO_DIR} && docker build -t ${IMAGE_NAME} ."
+vagrant ssh -c "cd ${REPO_DIR} && docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . && docker tag ${IMAGE_NAME}:${IMAGE_TAG} docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-echo "4. Importing to k3s"
-vagrant ssh -c "docker save ${IMAGE_NAME} | sudo k3s ctr images import -"
+# 4. Push to Docker Hub (requires prior 'docker login' inside VM)
+echo "4. Pushing image to Docker Hub"
+vagrant ssh -c "docker push docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-echo "5. Deploying to Kubernetes"
+# 5. Apply manifests
+echo "5. Applying Kubernetes manifests"
 vagrant ssh -c "cd ${REPO_DIR} && sudo k3s kubectl apply -f k8s-deploy.yaml"
 
-echo "6. Restarting deployment (ensures new image is used)"
-vagrant ssh -c "sudo k3s kubectl rollout restart deployment/${IMAGE_NAME}"
+# 6. Update deployment image to pull from registry
+echo "6. Updating deployment image to docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
+vagrant ssh -c "sudo k3s kubectl set image deployment/${IMAGE_NAME} flask=docker.io/${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG} --record"
 
 echo "7. Waiting for deployment"
 vagrant ssh -c "sudo k3s kubectl rollout status deployment/${IMAGE_NAME} --timeout=60s"

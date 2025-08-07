@@ -51,6 +51,22 @@ cd rhombus-hackathon
 vagrant ssh -c "curl http://localhost:30007"
 ```
 
+### Using Docker Hub (pull images instead of local import)
+```bash
+# Set your Docker Hub username and optional tag
+export DOCKERHUB_USER=<your-dockerhub-username>   # or hardcode in scripts
+export IMAGE_TAG=1.0.0                            # optional; defaults to timestamp
+
+# Log into Docker Hub inside the VM once (no token required unless 2FA is on)
+vagrant ssh -c "docker login -u $DOCKERHUB_USER"
+
+# Build, push, deploy, and point Deployment to the pushed tag
+./run.sh
+
+# Verify the image set on the deployment
+vagrant ssh -c "sudo k3s kubectl get deployment flask-demo -o jsonpath='{.spec.template.spec.containers[0].image}' && echo"
+```
+
 ### Manual Step-by-Step Setup
 
 **1. Initialize VM**
